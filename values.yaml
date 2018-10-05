@@ -186,3 +186,13 @@ connectInject:
     # defaults but can be customized if necessary.
     certName: tls.crt
     keyName: tls.key
+
+# Set to true to create an external LoadBalancer for each consul server. Provide
+# annotations for your cloud provider to correctly create the LoadBalancer.
+external:
+  enabled: false
+  annotations: {}
+  init:
+    image: "lwolf/kubectl_deployer"
+    imageTag: "0.4"
+    imagePullPolicy: "IfNotPresent"

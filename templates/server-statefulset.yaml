@@ -1,5 +1,6 @@
 # StatefulSet to run the actual Consul server cluster.
 {{- if (or (and (ne (.Values.server.enabled | toString) "-") .Values.server.enabled) (and (eq (.Values.server.enabled | toString) "-") .Values.global.enabled)) }}
+{{- $externalEnabled := (or (and (ne (.Values.external.enabled | toString) "-") .Values.external.enabled) (and (eq (.Values.external.enabled | toString) "-") .Values.global.enabled)) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -53,6 +54,8 @@ spec:
         - name: config
           configMap:
             name: {{ template "consul.fullname" . }}-server-config
+        - name: tmp
+          emptydir: {}
         {{- range .Values.server.extraVolumes }}
         - name: userconfig-{{ .name }}
           {{ .type }}:
@@ -62,6 +65,30 @@ spec:
             secretName: {{ .name }}
             {{- end }}
         {{- end }}
+      {{- if $externalEnabled }}
+      initContainers:
+        - name: init-ext
+          image: "{{ .Values.external.init.image }}:{{ .Values.external.init.imageTag }}"
+          imagePullPolicy: "{{ .Values.external.init.imagePullPolicy }}"
+          command:
+            - "/bin/sh"
+            - "-ec"
+            - |
+              kubectl label pods ${POD_NAME} --namespace ${POD_NAMESPACE} pod=${POD_NAME}
+              kubectl get svc ${POD_NAME}-external --namespace ${POD_NAMESPACE} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' | tee /consul/tmp/external_ip
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: tmp
+              mountPath: /consul/tmp
+      {{- end }}
       containers:
         - name: consul
           image: "{{ default .Values.global.image .Values.server.image }}"
@@ -74,14 +101,30 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           command:
             - "/bin/sh"
             - "-ec"
             - |
               CONSUL_FULLNAME="{{template "consul.fullname" . }}"
-
+              {{- if $externalEnabled }}
+              if [ -f /consul/tmp/external_ip ]; then
+                EXTERNAL_IP="$(cat /consul/tmp/external_ip)"
+              else
+                echo "Could not find file with external IP info"
+                exit 1
+              fi
+              EXTERNAL_IP="$(cat /consul/tmp/external_ip)"
+              echo "Will set advertise-wan to ${EXTERNAL_IP}"
+              {{- end }}
               exec /bin/consul agent \
                 -advertise="${POD_IP}" \
+                {{- if $externalEnabled }}
+                -advertise-wan="${EXTERNAL_IP}" \
+                {{- end }}
                 -bind=0.0.0.0 \
                 -bootstrap-expect={{ .Values.server.bootstrapExpect }} \
                 -client=0.0.0.0 \
@@ -109,6 +152,8 @@ spec:
               mountPath: /consul/data
             - name: config
               mountPath: /consul/config
+            - name: tmp
+              mountPath: /consul/tmp
             {{- range .Values.server.extraVolumes }}
             - name: userconfig-{{ .name }}
               readOnly: true

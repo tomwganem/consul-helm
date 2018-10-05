@@ -42,7 +42,7 @@ spec:
             - "-ec"
             - |
               consul-k8s sync-catalog \
-                -http-addr=${HOST_IP}:8500 \
+                -http-addr={{ template "consul.name" . }}-server:8500 \
                 {{- if (not .Values.syncCatalog.toConsul) }}
                 -to-consul=false \
                 {{- end }}
