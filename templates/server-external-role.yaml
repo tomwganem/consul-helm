@@ -1,0 +1,24 @@
+{{- $rbacEnabled := (or (and (ne (.Values.rbac.enabled | toString) "-") .Values.rbac.enabled) (and (eq (.Values.rbac.enabled | toString) "-") .Values.rbac.enabled)) }}
+{{- $externalEnabled := (or (and (ne (.Values.external.enabled | toString) "-") .Values.external.enabled) (and (eq (.Values.external.enabled | toString) "-") .Values.global.enabled)) }}
+{{- if (and $rbacEnabled $externalEnabled) }}
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: consul:server-external
+  labels:
+    app: {{ template "consul.name" . }}
+    chart: {{ template "consul.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+    verbs:
+      - get
+      - list
+      - update
+      - patch
+{{- end }}

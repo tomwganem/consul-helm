@@ -196,3 +196,6 @@ external:
     image: "lwolf/kubectl_deployer"
     imageTag: "0.4"
     imagePullPolicy: "IfNotPresent"
+
+rbac:
+  enabled: false
