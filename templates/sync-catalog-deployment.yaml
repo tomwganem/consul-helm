@@ -1,5 +1,7 @@
 # The deployment for running the Connect sidecar injector
-{{- if (or (and (ne (.Values.syncCatalog.enabled | toString) "-") .Values.syncCatalog.enabled) (and (eq (.Values.syncCatalog.enabled | toString) "-") .Values.global.enabled)) }}
+{{- $serverEnabled := (or (and (ne (.Values.server.enabled | toString) "-") .Values.server.enabled) (and (eq (.Values.server.enabled | toString) "-") .Values.global.enabled)) }}
+{{- $clientEnabled := (or (and (ne (.Values.client.enabled | toString) "-") .Values.client.enabled) (and (eq (.Values.client.enabled | toString) "-") .Values.global.enabled)) }}
+{{- if (and (or (and (ne (.Values.syncCatalog.enabled | toString) "-") .Values.syncCatalog.enabled) (and (eq (.Values.syncCatalog.enabled | toString) "-") .Values.global.enabled)) (or $clientEnabled $serverEnabled)) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,7 +44,11 @@ spec:
             - "-ec"
             - |
               consul-k8s sync-catalog \
+                {{- if $serverEnabled }}
+                -http-addr={{ template "consul.name" . }}-server:8500 \
+                {{- else }}
                 -http-addr=${HOST_IP}:8500 \
+                {{- end }}
                 {{- if (not .Values.syncCatalog.toConsul) }}
                 -to-consul=false \
                 {{- end }}

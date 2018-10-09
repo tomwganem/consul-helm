@@ -16,6 +16,7 @@ load _helpers
   local actual=$(helm template \
       -x templates/sync-catalog-deployment.yaml  \
       --set 'global.enabled=false' \
+      --set 'server.enabled=true' \
       --set 'syncCatalog.enabled=true' \
       . | tee /dev/stderr |
       yq 'length > 0' | tee /dev/stderr)
@@ -26,6 +27,7 @@ load _helpers
   cd `chart_dir`
   local actual=$(helm template \
       -x templates/sync-catalog-deployment.yaml  \
+      --set 'server.enabled=true' \
       --set 'syncCatalog.enabled=false' \
       . | tee /dev/stderr |
       yq 'length > 0' | tee /dev/stderr)
@@ -37,6 +39,19 @@ load _helpers
   local actual=$(helm template \
       -x templates/sync-catalog-deployment.yaml  \
       --set 'global.enabled=false' \
+      . | tee /dev/stderr |
+      yq 'length > 0' | tee /dev/stderr)
+  [ "${actual}" = "false" ]
+}
+
+@test "syncCatalog/Deployment: require server.enable or client.enabled" {
+  cd `chart_dir`
+  local actual=$(helm template \
+      -x templates/sync-catalog-deployment.yaml  \
+      --set 'global.enabled=true' \
+      --set 'server.enabled=false' \
+      --set 'client.enabled=false' \
+      --set 'syncCatalog.enabled=true' \
       . | tee /dev/stderr |
       yq 'length > 0' | tee /dev/stderr)
   [ "${actual}" = "false" ]
@@ -147,5 +162,30 @@ load _helpers
       --set 'syncCatalog.k8sPrefix=foo-' \
       . | tee /dev/stderr |
       yq '.spec.template.spec.containers[0].command | any(contains("-k8s-service-prefix=\"foo-\""))' | tee /dev/stderr)
+  [ "${actual}" = "true" ]
+}
+
+#--------------------------------------------------------------------
+# consul endpoint
+
+@test "syncCatalog/Deployment: connect with consul server service" {
+  cd `chart_dir`
+  local actual=$(helm template \
+      -x templates/sync-catalog-deployment.yaml  \
+      --set 'syncCatalog.enabled=true' \
+      . | tee /dev/stderr |
+      yq '.spec.template.spec.containers[0].command | any(contains("-http-addr=consul-server:85000"))' | tee /dev/stderr)
+  [ "${actual}" = "false" ]
+}
+
+@test "syncCatalog/Deployment: connect with consul client on host" {
+  cd `chart_dir`
+  local actual=$(helm template \
+      -x templates/sync-catalog-deployment.yaml  \
+      --set 'syncCatalog.enabled=true' \
+      --set 'server.enabled=false' \
+      --set 'syncCatalog.k8sPrefix=foo-' \
+      . | tee /dev/stderr |
+      yq '.spec.template.spec.containers[0].command | any(contains("-http-addr=${HOST_IP}:8500"))' | tee /dev/stderr)
   [ "${actual}" = "true" ]
 }
